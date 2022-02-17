@@ -48,7 +48,14 @@ all_provides() {
             else
                 RODATA=$ELFRODATA
             fi
-            for sym in $(nm "$module" | sed -r -ne 's:^0*([0-9a-f]+) R __crc_(.+):0x\1 \2:p'); do
+            # Commit binutils-2_33~1385[1] has changed (and binutils-2_35~1768[2]
+            # has not reverted it) the calculated type for symbols in read-write
+            # .rodata section from 'R' to 'D', since, apparently, many kernel
+            # modules have it indeed read-write.
+            #
+            # [1] https://sourceware.org/git/?p=binutils-gdb.git;a=commitdiff;h=a288c270991d
+            # [2] https://sourceware.org/git/?p=binutils-gdb.git;a=commitdiff;h=49d9fd42acef
+            for sym in $(nm "$module" | sed -r -ne 's:^0*([0-9a-f]+) [DR] __crc_(.+):0x\1 \2:p'); do
                 echo $sym $RODATA
             done \
             | awk --non-decimal-data '{printf("%s:0x%08s\n", $2, substr($3,($1*2)+1,8))}'
