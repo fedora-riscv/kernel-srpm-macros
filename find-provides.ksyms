@@ -1,12 +1,13 @@
 #! /bin/bash
 
 IFS=$'\n'
+export LC_ALL=C
 
 for module in $(grep -E '/lib/modules/.+\.ko(\.gz|\.bz2|\.xz|\.zst)?$') "$@"; do
     dep_pfx="ksym"
     # For built-in kmods, "kernel()" syntax is used instead of "ksym()"
     printf "%s" "$module" | grep -v "^${RPM_BUILD_ROOT}/\?lib/modules/[1-9][^/]*/kernel" > /dev/null \
-	|| dep_pfx="kernel"
+        || dep_pfx="kernel"
 
     tmpfile=""
     if [ "x${module%.ko}" = "x${module}" ]; then
@@ -37,7 +38,7 @@ for module in $(grep -E '/lib/modules/.+\.ko(\.gz|\.bz2|\.xz|\.zst)?$') "$@"; do
         nm $module \
         | sed -r -ne 's:^0*([0-9a-f]+) A __crc_(.+):0x\1 \2:p' \
         | awk --non-decimal-data '{printf("'"${dep_pfx}"'(%s) = 0x%08x\n", $2, $1)}' \
-        | LC_ALL=C sort -u
+        | sort -u
     else
         ELFRODATA=$(readelf -R .rodata $module | awk '/0x/{printf $2$3$4$5}')
         if [[ -n $(readelf -h $module | grep "little endian") ]]; then
@@ -49,7 +50,7 @@ for module in $(grep -E '/lib/modules/.+\.ko(\.gz|\.bz2|\.xz|\.zst)?$') "$@"; do
             echo $sym $RODATA
         done \
         | awk --non-decimal-data '{printf("'"${dep_pfx}"'(%s) = 0x%08s\n", $2, substr($3,($1*2)+1,8))}' \
-        | LC_ALL=C sort -u
+        | sort -u
     fi
 
     [ -z "$tmpfile" ] || rm -f -- "$tmpfile"
