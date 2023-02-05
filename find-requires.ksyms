@@ -42,23 +42,26 @@ all_provides() {
                --non-decimal-data \
               'match($0, /^([0-9a-f]+) A __crc_(.+)/, a) { printf("%s(%s) = 0x%08x\n", dep_pfx, a[2], strtonum("0x" a[1])) }'
         else
-            ELFRODATA=$(readelf -R .rodata "$module" | awk '/0x/{printf $2$3$4$5}')
-            if [[ -n $(readelf -h "$module" | grep "little endian") ]]; then
-                RODATA=$(echo $ELFRODATA | sed 's/\(..\)\(..\)\(..\)\(..\)/\4\3\2\1/g')
-            else
-                RODATA=$ELFRODATA
-            fi
-            # Commit binutils-2_33~1385[1] has changed (and binutils-2_35~1768[2]
-            # has not reverted it) the calculated type for symbols in read-write
-            # .rodata section from 'R' to 'D', since, apparently, many kernel
-            # modules have it indeed read-write.
-            #
-            # [1] https://sourceware.org/git/?p=binutils-gdb.git;a=commitdiff;h=a288c270991d
-            # [2] https://sourceware.org/git/?p=binutils-gdb.git;a=commitdiff;h=49d9fd42acef
-            for sym in $(nm "$module" | sed -r -ne 's:^0*([0-9a-f]+) [DR] __crc_(.+):0x\1 \2:p'); do
-                echo $sym $RODATA
-            done \
-            | awk --non-decimal-data '{printf("%s:0x%08s\n", $2, substr($3,($1*2)+1,8))}'
+            objdump -t "$module" \
+            | sed -n 's/^[0-9a-f][0-9a-f]* g...... \(.*\)	[0-9a-f][0-9a-f]* __crc_.*$/\1/p' \
+            | sort -u \
+            | while read sectname; do
+                [ -n "$sectname" ] || continue
+
+                ELFSECTDATA=$(readelf -R .rodata "$module" | awk '/0x/{printf $2$3$4$5}')
+                if [[ -n $(readelf -h "$module" | grep "little endian") ]]; then
+                    SECTDATA=$(echo $ELFSECTDATA | sed 's/\(..\)\(..\)\(..\)\(..\)/\4\3\2\1/g')
+                else
+                    SECTDATA=$ELFSECTDATA
+                fi
+
+                objdump -t "$module" \
+                | awk \
+                  -v 'dep_pfx='"$dep_pfx" \
+                  -v 'sectdata='"$SECTDATA" \
+                  --non-decimal-data \
+                  'match($0, /^([0-9a-f]+) g...... .*	[0-9a-f]+ __crc_(.*)$/, a) { printf("%s(%s) = 0x%08s\n", dep_pfx, a[2], substr(sectdata, (strtonum("0x" a[1]) * 2) + 1, 8)) }'
+            done
         fi
 
         [ -z "$tmpfile" ] || rm -f -- "$tmpfile"
