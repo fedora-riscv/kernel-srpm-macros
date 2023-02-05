@@ -58,8 +58,21 @@ Version: 205
 Summary: Macros and scripts for building kernel module packages
 Requires: redhat-rpm-config >= 205
 
-# for brp-kmod-set-exec-bit
+# for brp-kmod-compress
+Requires: %{_bindir}/xz
+# for brp-kmod-compress, brp-kmod-set-exec-bit
 Requires: %{_bindir}/find
+# for find-provides.ksyms, find-requires.ksyms, kmodtool
+Requires: %{_bindir}/sed
+# for find-provides.ksyms, find-requires.ksyms
+Requires: %{_bindir}/awk
+Requires: %{_bindir}/grep
+Requires: %{_bindir}/nm
+Requires: %{_bindir}/objdump
+Requires: %{_bindir}/readelf
+# for find-requires.ksyms
+Requires: %{_sbindir}/modinfo
+Requires: %{_sbindir}/modprobe
 
 %description -n kernel-rpm-macros
 Macros and scripts for building kernel module packages.
