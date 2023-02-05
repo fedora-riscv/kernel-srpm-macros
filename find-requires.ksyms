@@ -35,10 +35,12 @@ all_provides() {
             module="$tmpfile"
         fi
 
-        if [[ -n $(nm "$module" | sed -r -ne 's:^0*([0-9a-f]+) A __crc_(.+):0x\1 \2:p') ]]; then
+        if nm "$module" | grep -qE '^([0-9a-f]+) A __crc_(.+)' 2> /dev/null; then
             nm "$module" \
-            | sed -r -ne 's:^0*([0-9a-f]+) A __crc_(.+):0x\1 \2:p' \
-            | awk --non-decimal-data '{printf("%s:0x%08x\n", $2, $1)}'
+            | awk \
+               -v 'dep_pfx='"$dep_pfx" \
+               --non-decimal-data \
+              'match($0, /^([0-9a-f]+) A __crc_(.+)/, a) { printf("%s(%s) = 0x%08x\n", dep_pfx, a[2], strtonum("0x" a[1])) }'
         else
             ELFRODATA=$(readelf -R .rodata "$module" | awk '/0x/{printf $2$3$4$5}')
             if [[ -n $(readelf -h "$module" | grep "little endian") ]]; then

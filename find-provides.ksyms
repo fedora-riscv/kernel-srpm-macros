@@ -34,10 +34,12 @@ for module in $(grep -E '/lib/modules/.+\.ko(\.gz|\.bz2|\.xz|\.zst)?$') "$@"; do
         module="$tmpfile"
     fi
 
-    if [[ -n $(nm $module | sed -r -ne 's:^0*([0-9a-f]+) A __crc_(.+):0x\1 \2:p') ]]; then
-        nm $module \
-        | sed -r -ne 's:^0*([0-9a-f]+) A __crc_(.+):0x\1 \2:p' \
-        | awk --non-decimal-data '{printf("'"${dep_pfx}"'(%s) = 0x%08x\n", $2, $1)}' \
+    if nm "$module" | grep -qE '^([0-9a-f]+) A __crc_(.+)' 2> /dev/null; then
+        nm "$module" \
+        | awk \
+           -v 'dep_pfx='"$dep_pfx" \
+           --non-decimal-data \
+          'match($0, /^([0-9a-f]+) A __crc_(.+)/, a) { printf("%s(%s) = 0x%08x\n", dep_pfx, a[2], strtonum("0x" a[1])) }' \
         | sort -u
     else
         ELFRODATA=$(readelf -R .rodata $module | awk '/0x/{printf $2$3$4$5}')
