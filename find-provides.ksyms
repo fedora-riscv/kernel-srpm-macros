@@ -3,6 +3,10 @@
 IFS=$'\n'
 export LC_ALL=C
 
+# Prevent elfutils from trying to download debuginfos
+unset DEBUGINFOD_URLS
+
+
 for module in $(grep -E '/lib/modules/.+\.ko(\.gz|\.bz2|\.xz|\.zst)?$') "$@"; do
     dep_pfx="ksym"
     # For built-in kmods, "kernel()" syntax is used instead of "ksym()"

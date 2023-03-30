@@ -1,7 +1,7 @@
 Name:           kernel-srpm-macros
 Version:        1.0
 # when bumping version and resetting release, don't forget to bump version of kernel-rpm-macros as well
-Release:        17%{?dist}
+Release:        18%{?dist}
 Summary:        RPM macros that list arches the full kernel is built on
 # This package only exist in Fedora repositories
 # The license is the standard (MIT) specified in
@@ -134,6 +134,9 @@ install -p -m 644 -t "%{buildroot}%{_fileattrsdir}" modalias.attr
 %{rrcdir}/rpmsort
 
 %changelog
+* Tue Mar 30 2023 Eugene Syromiatnikov <esyr@redhat.com> - 1.0-18
+- Avoid triggering debuginfod during elfutils tools usage.
+
 * Tue Jan 31 2023 Eugene Syromiatnikov <esyr@redhat.com> - 1.0-17
 - Support storing of __crc_* symbols in sections other than .rodata.
 - Work around a change in type of __crc_* symbols for some kmods printed by nm
