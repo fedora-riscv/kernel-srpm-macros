@@ -10,7 +10,6 @@ IFS=$'\n'
 # Prevent elfutils from trying to download debuginfos
 unset DEBUGINFOD_URLS
 
-
 # Extract all of the symbols provided by this module.
 all_provides() {
     for module in "$@"; do
