@@ -42,7 +42,11 @@ print_modaliases() {
 
 combine_modaliases() {
     declare tag class variants="" pos="" n
-    read class
+
+    # Due to set -e, we can exit with exitcode 1 on read EOF
+    # and this makes our caller think we failed. "|| return 0" prevents this:
+    read class || return 0
+
     while read tag; do
 	for ((n=0; n<${#class}; n++)); do
 	    if [ "*" != "${class:n:1}" -a \
