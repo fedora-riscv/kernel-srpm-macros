@@ -20,7 +20,7 @@
           end
       end
   else
-      local mod = string.match(bn, "%g+.ko")
+      local mod = string.match(bn, "%g+%.ko")
       if mod then
          printdep(mod)
          if strip_compress_sfx(mod) ~= mod then
