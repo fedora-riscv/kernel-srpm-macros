@@ -30,7 +30,7 @@
   function printdep(mod)
       print("kmod("..mod..") ")
   end
-  local fn = rpm.expand("%{1}")
+  local fn = rpm.expand("%1")
   local bn = basename(fn)
   if bn == "modules.builtin" then
       for l in io.lines(fn) do
@@ -44,11 +44,11 @@
   else
       local mod = string.match(bn, "%g+%.ko")
       if mod then
-         printdep(mod)
-         local nocompr = strip_compress_sfx(mod)
-         if nocompr ~= mod then
-             printdep(nocompr)
-         end
+          printdep(mod)
+          local nocompr = strip_compress_sfx(mod)
+          if nocompr ~= mod then
+              printdep(nocompr)
+          end
       end
   end
 }
