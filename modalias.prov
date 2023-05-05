@@ -42,6 +42,14 @@ print_modaliases() {
     fi
 }
 
+# Try to make "provides" list a bit smaller:
+# find "mergeable" strings a-la
+# modalias(pci:v0000168Cd00000023sv*sd*bc*sc*i*)
+# modalias(pci:v0000168Cd00000024sv*sd*bc*sc*i*)
+# modalias(pci:v0000168Cd00000027sv*sd*bc*sc*i*)
+# modalias(pci:v0000168Cd00000029sv*sd*bc*sc*i*)
+# replace with
+# modalias(pci:v0000168Cd0000002[3479]sv*sd*bc*sc*i*)
 combine_modaliases() {
     local tag class variants="" pos="" n
 
@@ -49,24 +57,32 @@ combine_modaliases() {
     # and this makes our caller think we failed. "|| return 0" prevents this:
     read class || return 0
 
+    # For each line after the first...
     while read tag; do
+	# For each char in prev line...
 	for ((n=0; n<${#class}; n++)); do
+	    # If aaaNbbb = aaaMbbb and N isn't "*"
+	    # and N's position is the same as last time...
 	    if [ "*" != "${class:n:1}" -a \
 		 "${class:0:n}" = "${tag:0:n}" -a \
 		 "${class:n+1}" = "${tag:n+1}" ] &&
-	       ( [ -z "$pos" ] || [ $n = $pos ] ); then
+	       [ -z "$pos" -o "$n" = "$pos" ]; then
+		# Add M (and maybe N) to $variants, go to next line
 		variants="${variants:-${class:n:1}}${tag:n:1}"
 		pos=$n
 		break
 	    fi
 	done
 	if [ $n -eq ${#class} ]; then
+	    # This line is not mergeable, print collected merged line
+	    # and reset the state
 	    print_modaliases "$class" "$variants" "$pos"
 	    variants=
 	    pos=
 	    class=$tag
 	fi
     done
+    # Print last collected merged line
     print_modaliases "$class" "$variants" "$pos"
 }
 
