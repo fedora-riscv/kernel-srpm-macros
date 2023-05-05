@@ -26,10 +26,12 @@ if ! [ -z "$is_kernel_package" ]; then
     exit 0
 fi
 
-# Check for presence of the commands used
-which /sbin/modinfo >/dev/null || exit 0
-which sed >/dev/null || exit 0
-which sort >/dev/null || exit 0
+# Check for presence of the commands used.
+# "command" is a builtin, faster to use than fork+execing "which" - see
+# https://pubs.opengroup.org/onlinepubs/9699919799/utilities/command.html
+command -v /sbin/modinfo >/dev/null || exit 1
+command -v sed >/dev/null || exit 1
+command -v sort >/dev/null || exit 1
 
 print_modaliases() {
     declare class=$1 variants=$2 pos=$3
