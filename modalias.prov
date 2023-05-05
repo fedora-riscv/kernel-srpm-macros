@@ -34,7 +34,7 @@ command -v sed >/dev/null || exit 1
 command -v sort >/dev/null || exit 1
 
 print_modaliases() {
-    declare class=$1 variants=$2 pos=$3
+    local class="$1" variants="$2" pos="$3"
     if [ -n "$variants" ]; then
 	echo "${class:0:pos}[$variants]${class:pos+1}"
     else
@@ -43,7 +43,7 @@ print_modaliases() {
 }
 
 combine_modaliases() {
-    declare tag class variants="" pos="" n
+    local tag class variants="" pos="" n
 
     # Due to set -e, we can exit with exitcode 1 on read EOF
     # and this makes our caller think we failed. "|| return 0" prevents this:
