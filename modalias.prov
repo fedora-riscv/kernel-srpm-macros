@@ -51,14 +51,14 @@ print_modaliases() {
 # replace with
 # modalias(pci:v0000168Cd0000002[3479]sv*sd*bc*sc*i*)
 combine_modaliases() {
-    local tag class variants="" pos="" n
+    local unused_len tag class variants="" pos="" n
 
     # Due to set -e, we can exit with exitcode 1 on read EOF
     # and this makes our caller think we failed. "|| return 0" prevents this:
-    read class || return 0
+    IFS=' ' read unused_len class || return 0
 
     # For each line after the first...
-    while read tag; do
+    while IFS=' ' read unused_len tag; do
 	# For each char in prev line...
 	for ((n=0; n<${#class}; n++)); do
 	    # If aaaNbbb = aaaMbbb and N isn't "*"
@@ -95,6 +95,11 @@ for module in $(grep -E '/lib/modules/.+\.ko(\.gz|\.bz2|\.xz|\.zst)?$') "$@"; do
 
     /sbin/modinfo -F alias "$module" \
     | sed -nre "s,[^][0-9a-zA-Z._:*?/-],_,g; s,(.+),modalias(\\1)$modver,p"
+
+    # Below: combining code can only possibly combine lines of equal length.
+    # Prepend line lengths before sort, so that same-length lines end up next
+    # to each other. (The lengths are discarded by combine_modaliases).
 done \
+| { while read line; do echo "${#line} $line"; done } \
 | LC_ALL=C sort -u \
 | combine_modaliases
