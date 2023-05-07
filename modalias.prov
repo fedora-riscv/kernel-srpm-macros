@@ -51,7 +51,7 @@ print_modaliases() {
 # replace with
 # modalias(pci:v0000168Cd0000002[3479]sv*sd*bc*sc*i*)
 combine_modaliases() {
-    local unused_len tag class variants="" pos="" n
+    local unused_len tag class variants="" pos="" n end xc
 
     # Due to set -e, we can exit with exitcode 1 on read EOF
     # and this makes our caller think we failed. "|| return 0" prevents this:
@@ -59,26 +59,44 @@ combine_modaliases() {
 
     # For each line after the first...
     while IFS=' ' read unused_len tag; do
-	# For each char in prev line...
-	for ((n=0; n<${#class}; n++)); do
-	    # If aaaNbbb = aaaMbbb and N isn't "*"
-	    # and N's position is the same as last time...
-	    if [ "*" != "${class:n:1}" -a \
-		 "${class:0:n}" = "${tag:0:n}" -a \
-		 "${class:n+1}" = "${tag:n+1}" ] &&
-	       [ -z "$pos" -o "$n" = "$pos" ]; then
-		# Add M (and maybe N) to $variants, go to next line
-		variants="${variants:-${class:n:1}}${tag:n:1}"
-		pos=$n
+	if [ -z "$pos" ]; then
+	    # 2nd line: after "modalias(" prefix, for each char in prev line...
+	    n=9
+	    end=${#class}
+	else
+	    # 3rd+ lines: only check the char at the same position
+	    n=$pos
+	    end=$((pos + 1))
+	fi
+	# Search for aaaNbbb,aaaMbbb line pair, where N and M chars differ.
+	# sort -u guarantees there are no identical line pairs.
+	# We assume that lines will not differ only in " = version" suffix.
+	for ((; n < $end; n++)); do
+	    if [ "${class:0:n}" != "${tag:0:n}" ]; then
+		# the prefixes already aren't the same: break
+		n=$end
 		break
 	    fi
+	    # If suffixes differ, go to next char
+	    [ x"${class:n+1}" != x"${tag:n+1}" ] && continue
+	    # aaaNbbb = aaaMbbb. If N and M aren't special...
+	    xc=x"${class:n:1}"
+	    [ x"[" = "$xc" -o x"]" = "$xc" ] && continue
+	    [ x"?" = "$xc" -o x"*" = "$xc" ] && continue
+	    xc=x"${tag:n:1}"
+	    [ x"[" = "$xc" -o x"]" = "$xc" ] && continue
+	    [ x"?" = "$xc" -o x"*" = "$xc" ] && continue
+	    # Add M (and maybe N) to $variants, go to next line
+	    variants="${variants:-${class:n:1}}${tag:n:1}"
+	    pos=$n
+	    break
 	done
-	if [ $n -eq ${#class} ]; then
-	    # This line is not mergeable, print collected merged line
-	    # and reset the state
+	if [ $n -eq $end ]; then
+	    # This line is not mergeable with the previous one(s),
+	    # print collected merged line and reset the state
 	    print_modaliases "$class" "$variants" "$pos"
-	    variants=
-	    pos=
+	    variants=""
+	    pos=""
 	    class=$tag
 	fi
     done
@@ -87,10 +105,12 @@ combine_modaliases() {
 }
 
 for module in $(grep -E '/lib/modules/.+\.ko(\.gz|\.bz2|\.xz|\.zst)?$') "$@"; do
-    # | head -n1 because some modules have *two* version tags. *cough*b44*cough*
-    modver=$(/sbin/modinfo -F version "$module"| head -n1)
+    modver=$(/sbin/modinfo -F version "$module")
+    # delete possible extra lines because some modules have *two* version tags. *cough*b44*cough*
+    modver=${modver%%$'\n'*}    # using $'' bashism, avoid running "head -n1" process
+    # replace any strange chars with underscores.
     modver=${modver//[^0-9a-zA-Z._]/_}
-    # only add version tag if it has a version
+    # only add version tag if it indeed has a version
     [ -z "$modver" ] || modver=" = $modver"
 
     /sbin/modinfo -F alias "$module" \
