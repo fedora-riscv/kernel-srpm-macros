@@ -109,12 +109,14 @@ for module in $(grep -E '/lib/modules/.+\.ko(\.gz|\.bz2|\.xz|\.zst)?$') "$@"; do
     # delete possible extra lines because some modules have *two* version tags. *cough*b44*cough*
     modver=${modver%%$'\n'*}    # using $'' bashism, avoid running "head -n1" process
     # replace any strange chars with underscores.
-    modver=${modver//[^0-9a-zA-Z._]/_}
+    # [!...] is glob's "match any char not in set" pattern
+    # (although bash supports [^...] too, it is not standard)
+    modver=${modver//[!0-9a-zA-Z._]/_}
     # only add version tag if it indeed has a version
     [ -z "$modver" ] || modver=" = $modver"
 
     /sbin/modinfo -F alias "$module" \
-    | sed -nre "s,[^][0-9a-zA-Z._:*?/-],_,g; s,(.+),modalias(\\1)$modver,p"
+    | sed -E "s,[^][0-9a-zA-Z._:*?/-],_,g; s,(.+),modalias(\\1)$modver,"
 
     # Below: combining code can only possibly combine lines of equal length.
     # Prepend line lengths before sort, so that same-length lines end up next
