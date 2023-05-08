@@ -51,18 +51,19 @@ print_modaliases() {
 # replace with
 # modalias(pci:v0000168Cd0000002[3479]sv*sd*bc*sc*i*)
 combine_modaliases() {
-    local unused_len tag class variants="" pos="" n end xc
+    local unused_len next prev variants="" pos="" n end xc
 
     # Due to set -e, we can exit with exitcode 1 on read EOF
     # and this makes our caller think we failed. "|| return 0" prevents this:
-    IFS=' ' read unused_len class || return 0
+    IFS=' ' read unused_len prev || return 0
 
     # For each line after the first...
-    while IFS=' ' read unused_len tag; do
+    while IFS=' ' read unused_len next; do
 	if [ -z "$pos" ]; then
 	    # 2nd line: after "modalias(" prefix, for each char in prev line...
 	    n=9
-	    end=${#class}
+	    end=${#prev}
+	    # TODO speedup? if [ $end != ${#next} ]; then line is not mergeable
 	else
 	    # 3rd+ lines: only check the char at the same position
 	    n=$pos
@@ -72,36 +73,36 @@ combine_modaliases() {
 	# sort -u guarantees there are no identical line pairs.
 	# We assume that lines will not differ only in " = version" suffix.
 	for ((; n < $end; n++)); do
-	    if [ "${class:0:n}" != "${tag:0:n}" ]; then
+	    if [ "${prev:0:n}" != "${next:0:n}" ]; then
 		# the prefixes already aren't the same: break
 		n=$end
 		break
 	    fi
 	    # If suffixes differ, go to next char
-	    [ x"${class:n+1}" != x"${tag:n+1}" ] && continue
-	    # aaaNbbb = aaaMbbb. If N and M aren't special...
-	    xc=x"${class:n:1}"
+	    [ x"${prev:n+1}" != x"${next:n+1}" ] && continue
+	    # Found aaaNbbb,aaaMbbb. If N and M aren't special...
+	    xc=x"${prev:n:1}"
 	    [ x"[" = "$xc" -o x"]" = "$xc" ] && continue
 	    [ x"?" = "$xc" -o x"*" = "$xc" ] && continue
-	    xc=x"${tag:n:1}"
+	    xc=x"${next:n:1}"
 	    [ x"[" = "$xc" -o x"]" = "$xc" ] && continue
 	    [ x"?" = "$xc" -o x"*" = "$xc" ] && continue
 	    # Add M (and maybe N) to $variants, go to next line
-	    variants="${variants:-${class:n:1}}${tag:n:1}"
+	    variants="${variants:-${prev:n:1}}${next:n:1}"
 	    pos=$n
 	    break
 	done
 	if [ $n -eq $end ]; then
 	    # This line is not mergeable with the previous one(s),
 	    # print collected merged line and reset the state
-	    print_modaliases "$class" "$variants" "$pos"
+	    print_modaliases "$prev" "$variants" "$pos"
 	    variants=""
 	    pos=""
-	    class=$tag
+	    prev=$next
 	fi
     done
     # Print last collected merged line
-    print_modaliases "$class" "$variants" "$pos"
+    print_modaliases "$prev" "$variants" "$pos"
 }
 
 for module in $(grep -E '/lib/modules/.+\.ko(\.gz|\.bz2|\.xz|\.zst)?$') "$@"; do
