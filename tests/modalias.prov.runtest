@@ -16,8 +16,8 @@ cp ../../modalias.prov modalias.prov
 patch -p1 <<"EOF"
 --- a/modalias.prov
 +++ b/modalias.prov
-@@ -86,6 +86,17 @@ combine_modaliases() {
-     print_modaliases "$class" "$variants" "$pos"
+@@ -105,6 +105,17 @@ combine_modaliases() {
+     print_modaliases "$prev" "$variants" "$pos"
  }
  
 +if [ "$#" = 2 ] && [ "$1" = "-t" ]; then
@@ -32,8 +32,8 @@ patch -p1 <<"EOF"
 +fi
 +
  for module in $(grep -E '/lib/modules/.+\.ko(\.gz|\.bz2|\.xz|\.zst)?$') "$@"; do
-     # | head -n1 because some modules have *two* version tags. *cough*b44*cough*
-     modver=$(/sbin/modinfo -F version "$module"| head -n1)
+     modver=$(/sbin/modinfo -F version "$module")
+     # delete possible extra lines because some modules have *two* version tags. *cough*b44*cough*
 EOF
 
 find | grep '\.ko.*\.modalias$' | xargs -n1 ./modalias.prov -t
