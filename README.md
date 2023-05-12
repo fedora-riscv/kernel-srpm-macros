@@ -12,14 +12,11 @@ kernel-srpm-macros:
 	specifies a Lua script to generate kmod(MODULE.ko)
 	"Provides:" deps
 /usr/lib/rpm/macros.d/macros.kernel-srpm
-	?
+	Automatically included by all rpm invocations.
+	Defines %kernel_arches (try rpm --eval '%kernel_arches')
+		Question: what uses this macro? I didn't find any users.
 
 kernel-rpm-macros:
-
-/usr/lib/rpm/redhat/brp-kmod-restore-perms
-	?
-/usr/lib/rpm/redhat/brp-kmod-set-exec-bit
-	?
 
 /usr/lib/rpm/redhat/find-provides.ksyms
 	Runs from rpmbuild at the end of kernel builds and 3rd party module
@@ -48,6 +45,7 @@ kernel-rpm-macros:
 	modalias(pci:SOMETHING)=OPTIONALLY_VERSION "Provides:" deps from modules
 	in kernel and 3rd party modules packages.
 	Takes input list of files on stdin.
+		Question: what uses these deps?
 /usr/lib/rpm/fileattrs/modalias.attr
 	For newer rpmbuild with "internal dependency generators",
 	this file specifies that modalias.prov should be run
@@ -62,9 +60,15 @@ kernel-rpm-macros:
 /usr/lib/rpm/fileattrs/kabi.attr
 	For newer rpmbuild with "internal dependency generators",
 	this file specifies that kabi.sh should be run on
-	/boot/symvers-* and /lib/modules/XYZ/symvers).gz
+	/boot/symvers-* and /lib/modules/XYZ/symvers.gz
 
 /usr/lib/rpm/macros.d/macros.kmp
+	Automatically included by all rpm invocations.
+	Defines a number of macros.
+
+/usr/lib/rpm/redhat/brp-kmod-restore-perms
+	?
+/usr/lib/rpm/redhat/brp-kmod-set-exec-bit
 	?
 
 /usr/lib/rpm/redhat/kmodtool
