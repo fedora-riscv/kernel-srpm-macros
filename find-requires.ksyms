@@ -62,8 +62,9 @@ all_provides() {
                 | awk \
                   -v 'dep_pfx='"$dep_pfx" \
                   -v 'sectdata='"$SECTDATA" \
+                  -v 'sectname='"$sectname" \
                   --non-decimal-data \
-                  'match($0, /^([0-9a-f]+) [gl]...... .*	[0-9a-f]+ __crc_(.*)$/, a) { printf("%s(%s) = 0x%08s\n", dep_pfx, a[2], substr(sectdata, (strtonum("0x" a[1]) * 2) + 1, 8)) }'
+                  'match($0, /^([0-9a-f]+) [gl]...... (.*)	[0-9a-f]+ __crc_(.*)$/, a) && a[2] == sectname { printf("%s(%s) = 0x%08s\n", dep_pfx, a[3], substr(sectdata, (strtonum("0x" a[1]) * 2) + 1, 8)) }'
             done
         fi
 
