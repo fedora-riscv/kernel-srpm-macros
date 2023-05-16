@@ -46,7 +46,7 @@ all_provides() {
               'match($0, /^([0-9a-f]+) A __crc_(.+)/, a) { printf("%s(%s) = 0x%08x\n", dep_pfx, a[2], strtonum("0x" a[1])) }'
         else
             objdump -t "$module" \
-            | sed -n 's/^[0-9a-f][0-9a-f]* g...... \(.*\)	[0-9a-f][0-9a-f]* __crc_.*$/\1/p' \
+            | sed -n 's/^[0-9a-f][0-9a-f]* [gl]...... \(.*\)	[0-9a-f][0-9a-f]* __crc_.*$/\1/p' \
             | sort -u \
             | while read sectname; do
                 [ -n "$sectname" ] || continue
@@ -63,7 +63,7 @@ all_provides() {
                   -v 'dep_pfx='"$dep_pfx" \
                   -v 'sectdata='"$SECTDATA" \
                   --non-decimal-data \
-                  'match($0, /^([0-9a-f]+) g...... .*	[0-9a-f]+ __crc_(.*)$/, a) { printf("%s(%s) = 0x%08s\n", dep_pfx, a[2], substr(sectdata, (strtonum("0x" a[1]) * 2) + 1, 8)) }'
+                  'match($0, /^([0-9a-f]+) [gl]...... .*	[0-9a-f]+ __crc_(.*)$/, a) { printf("%s(%s) = 0x%08s\n", dep_pfx, a[2], substr(sectdata, (strtonum("0x" a[1]) * 2) + 1, 8)) }'
             done
         fi
 
