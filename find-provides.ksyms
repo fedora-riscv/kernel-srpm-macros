@@ -50,12 +50,11 @@ for module in $(grep -E '/lib/modules/.+\.ko(\.gz|\.bz2|\.xz|\.zst)?$') "$@"; do
         | while read -r sectname; do
             [ -n "$sectname" ] || continue
 
-            ELFSECTDATA=$(readelf -R "$sectname" "$module" | awk '/0x/{printf $2$3$4$5}')
-            if [[ -n $(readelf -h $module | grep "little endian") ]]; then
-                SECTDATA=$(echo $ELFSECTDATA | sed 's/\(..\)\(..\)\(..\)\(..\)/\4\3\2\1/g')
-            else
-                SECTDATA=$ELFSECTDATA
-            fi
+            revbytes=""
+            kmod_elf_hdr="$(readelf -h "$module")"
+            [ "x$kmod_elf_hdr" = "x${kmod_elf_hdr%Data:*little endian*}" ] ||
+                revbytes='a = gensub(/(..)(..)(..)(..)/, "\\4\\3\\2\\1", "g", a);'
+            SECTDATA=$(readelf -R "$sectname" "$module" | awk '/^  0x[0-9a-f]{8}/{ a = substr($0, 14, 8) substr($0, 23, 8) substr($0, 32, 8) substr($0, 41, 8); '"$revbytes"' printf("%s", a); }')
 
             objdump -t "$module" \
             | awk \
