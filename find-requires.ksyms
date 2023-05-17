@@ -51,7 +51,7 @@ all_provides() {
             | while read sectname; do
                 [ -n "$sectname" ] || continue
 
-                ELFSECTDATA=$(readelf -R .rodata "$module" | awk '/0x/{printf $2$3$4$5}')
+                ELFSECTDATA=$(readelf -R "$sectname" "$module" | awk '/0x/{printf $2$3$4$5}')
                 if [[ -n $(readelf -h "$module" | grep "little endian") ]]; then
                     SECTDATA=$(echo $ELFSECTDATA | sed 's/\(..\)\(..\)\(..\)\(..\)/\4\3\2\1/g')
                 else
