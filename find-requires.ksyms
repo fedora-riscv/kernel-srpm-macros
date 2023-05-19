@@ -6,6 +6,7 @@
 # provided by an external module and "ksym" replaces th regular "kernel" dep.
 
 IFS=$'\n'
+export LC_ALL=C
 
 # Prevent elfutils from trying to download debuginfos
 unset DEBUGINFOD_URLS
@@ -70,7 +71,7 @@ all_provides() {
 
         [ -z "$tmpfile" ] || rm -f -- "$tmpfile"
     done \
-    | LC_ALL=C sort -k1,1 -u
+    | sort -k1,1 -u
 }
 
 # Extract all of the requirements of this module.
@@ -83,15 +84,15 @@ all_requires() {
             {printf("%s:0x%08x\n", $2, $1)}' \
         | sed -r -e 's:$:\t'"$1"':'
     done \
-    | LC_ALL=C sort -k1,1 -u
+    | sort -k1,1 -u
 }
 
 # Filter out requirements fulfilled by the module itself.
 mod_requires() {
-    LC_ALL=C join -t $'\t' -j 1 -v 1 \
+    join -t $'\t' -j 1 -v 1 \
         <(all_requires "$@") \
         <(all_provides "$@") \
-    | LC_ALL=C sort -k1,1 -u
+    | sort -k1,1 -u
 }
 
 if ! [ -e /sbin/modinfo -a -e /sbin/modprobe ]; then
@@ -154,23 +155,23 @@ if [ ${#modules[@]} -gt 0 ]; then
         { print $2 ":" $1 }
     ' \
     | sed -r -e 's:$:\t'"$kernel"':' \
-    | LC_ALL=C sort -k1,1 -u > $symvers
+    | sort -k1,1 -u > $symvers
 
     # Symbols matching with the kernel get a "kernel" dependency
     mod_req=$(mktemp -t mod_req.XXXXX)
     mod_requires "${modules[@]}" > "$mod_req"
-    LC_ALL=C join -t $'\t' -j 1 $symvers "$mod_req" | LC_ALL=C sort -u \
+    join -t $'\t' -j 1 $symvers "$mod_req" | sort -u \
     | awk 'BEGIN { FS = "[\t:]" ; OFS = "\t" } { print "kernel(" $1 ") = " $2 }'
 
     # Symbols from elsewhere get a "ksym" dependency
-    LC_ALL=C join -t $'\t' -j 1 -v 2 $symvers "$mod_req" | LC_ALL=C sort -u \
+    join -t $'\t' -j 1 -v 2 $symvers "$mod_req" | sort -u \
     | awk 'BEGIN { FS = "[\t:]" ; OFS = "\t" } { print "ksym(" $1 ") = " $2 }'
 
     os_id=$(sed -nr '/^ID[[:space:]]*=/{ s/ID[[:space:]]*=[[:space:]]*//; s/^"(.*)"$/\1/; p }' /etc/os-release)
     if [ "rhel" = "$os_id" ]; then
         # Check kABI if the kabi-stablelists package is installed
         # Do this last so we can try to output this error at the end
-        kabi_check_symbols=($(LC_ALL=C join -t $'\t' -j 1 $symvers "$mod_req" | LC_ALL=C sort -u \
+        kabi_check_symbols=($(join -t $'\t' -j 1 $symvers "$mod_req" | sort -u \
         | awk 'BEGIN { FS = "[\t:]" ; OFS = "\t" } { print $1 }'))
         check_kabi "${kabi_check_symbols[@]}"
     fi
