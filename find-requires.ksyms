@@ -52,19 +52,26 @@ all_provides() {
             | while read -r sectname; do
                 [ -n "$sectname" ] || continue
 
-                revbytes=""
                 kmod_elf_hdr="$(readelf -h "$module")"
-                [ "x$kmod_elf_hdr" = "x${kmod_elf_hdr%Data:*little endian*}" ] ||
-                    revbytes='a = gensub(/(..)(..)(..)(..)/, "\\4\\3\\2\\1", "g", a);'
-                SECTDATA=$(readelf -R "$sectname" "$module" | awk '/^  0x[0-9a-f]{8}/{ a = substr($0, 14, 8) substr($0, 23, 8) substr($0, 32, 8) substr($0, 41, 8); '"$revbytes"' printf("%s", a); }')
+                [ "x$kmod_elf_hdr" = "x${kmod_elf_hdr%Data:*little endian*}" ]
+                revbytes="$?"
 
                 objdump -t "$module" \
                 | awk \
                   -v 'dep_pfx='"$dep_pfx" \
-                  -v 'sectdata='"$SECTDATA" \
+                  -v 'module='"$module" \
+                  -v 'revbytes='"$revbytes" \
                   -v 'sectname='"$sectname" \
                   --non-decimal-data \
-                  'match($0, /^([0-9a-f]+) [gl]...... (.*)	[0-9a-f]+ __crc_(.*)$/, a) && a[2] == sectname { printf("%s(%s) = 0x%08s\n", dep_pfx, a[3], substr(sectdata, (strtonum("0x" a[1]) * 2) + 1, 8)) }'
+                  'BEGIN {
+                      sectdata = "";
+                      while (("readelf -R \"" sectname "\" \"" module "\"" | getline t) > 0) {
+                          if (match(t, /^  0x[0-9a-f]{8}/))
+                              sectdata = sectdata substr(t, 14, 8) substr(t, 23, 8) substr(t, 32, 8) substr(t, 41, 8);
+                      }
+                      if (revbytes) { sectdata = gensub(/(..)(..)(..)(..)/, "\\4\\3\\2\\1", "g", sectdata); }
+                  }
+                  match($0, /^([0-9a-f]+) [gl]...... (.*)	[0-9a-f]+ __crc_(.*)$/, a) && a[2] == sectname { printf("%s(%s) = 0x%08s\n", dep_pfx, a[3], substr(sectdata, (strtonum("0x" a[1]) * 2) + 1, 8)) }'
             done
         fi
 
