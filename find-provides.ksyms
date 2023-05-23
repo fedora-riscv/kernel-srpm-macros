@@ -48,7 +48,7 @@ for module in $(grep -E '/lib/modules/.+\.ko(\.gz|\.bz2|\.xz|\.zst)?$') "$@"; do
         objdump -t "$module" \
         | sed -n 's/^[0-9a-f][0-9a-f]* [gl]...... \(.*\)	[0-9a-f][0-9a-f]* __crc_.*$/\1/p' \
         | sort -u \
-        | while read sectname; do
+        | while read -r sectname; do
             [ -n "$sectname" ] || continue
 
             ELFSECTDATA=$(readelf -R "$sectname" "$module" | awk '/0x/{printf $2$3$4$5}')
