@@ -39,13 +39,28 @@ all_provides() {
             module="$tmpfile"
         fi
 
-        if nm "$module" | grep -qE '^([0-9a-f]+) A __crc_(.+)' 2> /dev/null; then
-            nm "$module" \
-            | awk \
-               -v 'dep_pfx='"$dep_pfx" \
-               --non-decimal-data \
-              'match($0, /^([0-9a-f]+) A __crc_(.+)/, a) { printf("%s(%s) = 0x%08x\n", dep_pfx, a[2], strtonum("0x" a[1])) }'
-        else
+        # awk script return code:
+        #   0 - absolute __crc_* symbols have been found, output has been
+        #       generated;
+        #   23 - a non-absolute __crc_* symbold has been found;
+        #   42 - no __crc_* symbols have been found.
+        nm "$module" \
+        | awk \
+           -v 'dep_pfx='"$dep_pfx" \
+           --non-decimal-data \
+           'BEGIN { exit_code = 42 }
+           match($0, /^([0-9a-f]+) (.) __crc_(.+)/, a) {
+               if (a[2] == "A") {
+                   printf("%s(%s) = 0x%08x\n", dep_pfx, a[3], strtonum("0x" a[1]));
+                   exit_code = 0;
+               } else {
+                   exit_code = 23;
+                   exit;
+               }
+           }
+           END { exit exit_code }'
+
+        [ 23 = "$?" ] && {
             objdump -t "$module" \
             | sed -n 's/^[0-9a-f][0-9a-f]* [gl]...... \(.*\)	[0-9a-f][0-9a-f]* __crc_.*$/\1/p' \
             | sort -u \
@@ -73,7 +88,7 @@ all_provides() {
                   }
                   match($0, /^([0-9a-f]+) [gl]...... (.*)	[0-9a-f]+ __crc_(.*)$/, a) && a[2] == sectname { printf("%s(%s) = 0x%08s\n", dep_pfx, a[3], substr(sectdata, (strtonum("0x" a[1]) * 2) + 1, 8)) }'
             done
-        fi
+        }
 
         [ -z "$tmpfile" ] || rm -f -- "$tmpfile"
     done \
