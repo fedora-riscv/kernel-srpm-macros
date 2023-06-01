@@ -39,11 +39,15 @@ for module in $(grep -E '/lib/modules/.+\.ko(\.gz|\.bz2|\.xz|\.zst)?$') "$@"; do
 
     # A modversion can be stored as an ELF symbol in various ways:
     # - An immediate symbol whose value is available directly;  it shows up
-    #   in the nm output, for example:
+    #   in the nm or objdump -t output, for example:
     #       $ nm mlx5_core_5.14.x86_64.ko | grep '__crc_' | head -n 3
     #       0000000092f175ca A __crc_mlx5_access_reg
     #       000000005b88c9f1 A __crc_mlx5_add_flow_rules
     #       00000000e7c0ec8a A __crc_mlx5_alloc_bfreg
+    #       $ objdump -t lib/modules/mlx5_core_5.14.x86_64.ko | grep __crc_ | sort -k 5,5 | head -n 3
+    #       0000000092f175ca g       *ABS*	0000000000000000 __crc_mlx5_access_reg
+    #       000000005b88c9f1 g       *ABS*	0000000000000000 __crc_mlx5_add_flow_rules
+    #       00000000e7c0ec8a g       *ABS*	0000000000000000 __crc_mlx5_alloc_bfreg
     #       $ zgrep mlx5_access_reg ./lib/modules/5.14.0-284.15.1.el9_2.x86_64/symvers.gz
     #       0x92f175ca	mlx5_access_reg	drivers/net/ethernet/mellanox/mlx5/core/mlx5_core	EXPORT_SYMBOL_GPL
     #   This approach was being used on x86 and arm before Linux 5.19,
@@ -88,59 +92,46 @@ for module in $(grep -E '/lib/modules/.+\.ko(\.gz|\.bz2|\.xz|\.zst)?$') "$@"; do
     #   This data, after some post-processing,  can be used in the awk script
     #   that extracts parts of the section according to the offsets got
     #   from the "objdump -t" output.
-    #
-    # An important assumption here is that all the __crc_* symbols in a kmod
-    # are either absolute or relative ones (and this one has been held so far,
-    # and supposedly will in the future, as the symbols are universally
-    # non-immediate now).
-
-    # awk script return code:
-    #   0 - absolute __crc_* symbols have been found, output has been
-    #       generated;
-    #   23 - a non-absolute __crc_* symbold has been found;
-    #   42 - no __crc_* symbols have been found.
-    nm "$module" \
+    objdump -t "$module" \
     | awk \
-       -v 'dep_pfx='"$dep_pfx" \
-       --non-decimal-data \
-       'BEGIN { exit_code = 42 }
-       match($0, /^([0-9a-f]+) (.) __crc_(.+)/, a) {
-           if (a[2] == "A") {
-               printf("%s(%s) = 0x%08x\n", dep_pfx, a[3], strtonum("0x" a[1]));
-               exit_code = 0;
-           } else {
-               exit_code = 23;
-               exit;
-           }
-       }
-       END { exit exit_code }'
+      -v 'dep_pfx='"$dep_pfx" \
+      -v 'module='"$module" \
+      --non-decimal-data \
+      'BEGIN { revbytes = 0 }
 
-    [ 23 = "$?" ] && {
-        kmod_elf_hdr="$(readelf -h "$module")"
-        [ "x$kmod_elf_hdr" = "x${kmod_elf_hdr%Data:*little endian*}" ]
-        revbytes="$?"
+      function check_endianness(   t) {
+          if (revbytes) return revbytes;
 
-        objdump -t "$module" \
-        | awk \
-          -v 'dep_pfx='"$dep_pfx" \
-          -v 'module='"$module" \
-          -v 'revbytes='"$revbytes" \
-          --non-decimal-data \
-          'function readsect(name,   a, t) {
-              a = "";
-              while (("readelf -R \"" name "\" \"" module "\"" | getline t) > 0) {
-                  if (match(t, /^  0x[0-9a-f]{8}/))
-                      a = a substr(t, 14, 8) substr(t, 23, 8) substr(t, 32, 8) substr(t, 41, 8);
+          revbytes = -1;
+          while (("readelf -h \"" module "\"" | getline t) > 0) {
+              if (match(t, /^  Data: *2\047s complement, little endian$/)) {
+                  revbytes = 1;
+                  break;
               }
-              if (revbytes) { a = gensub(/(..)(..)(..)(..)/, "\\4\\3\\2\\1", "g", a); }
-              sectdata[name] = a;
           }
 
-          match($0, /^([0-9a-f]+) [gl]...... (.*)	[0-9a-f]+ __crc_(.*)$/, a) {
+          return revbytes;
+      }
+
+      function readsect(name,   a, t) {
+          a = "";
+          while (("readelf -R \"" name "\" \"" module "\"" | getline t) > 0) {
+              if (match(t, /^  0x[0-9a-f]{8}/))
+                  a = a substr(t, 14, 8) substr(t, 23, 8) substr(t, 32, 8) substr(t, 41, 8);
+          }
+          if (check_endianness() == 1)
+              a = gensub(/(..)(..)(..)(..)/, "\\4\\3\\2\\1", "g", a);
+          sectdata[name] = a;
+      }
+
+      match($0, /^([0-9a-f]+) [gl]...... (.*)	[0-9a-f]+ __crc_(.*)$/, a) {
+          if (a[2] == "*ABS*") {
+              printf("%s(%s) = 0x%08x\n", dep_pfx, a[3], strtonum("0x" a[1]));
+          } else {
               if (!(a[2] in sectdata)) { readsect(a[2]) }
               printf("%s(%s) = 0x%08s\n", dep_pfx, a[3], substr(sectdata[a[2]], (strtonum("0x" a[1]) * 2) + 1, 8))
-          }'
-    }
+          }
+      }'
 
     [ -z "$tmpfile" ] || rm -f -- "$tmpfile"
 done \
