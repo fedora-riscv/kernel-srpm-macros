@@ -1,7 +1,7 @@
 Name:           kernel-srpm-macros
 Version:        1.0
 # when bumping version and resetting release, don't forget to bump version of kernel-rpm-macros as well
-Release:        16.rv64%{?dist}
+Release:        20.rv64%{?dist}
 Summary:        RPM macros that list arches the full kernel is built on
 # This package only exist in Fedora repositories
 # The license is the standard (MIT) specified in
@@ -58,8 +58,21 @@ Version: 205
 Summary: Macros and scripts for building kernel module packages
 Requires: redhat-rpm-config >= 205
 
-# for brp-kmod-set-exec-bit
+# for brp-kmod-compress
+Requires: %{_bindir}/xz
+# for brp-kmod-compress, brp-kmod-set-exec-bit
 Requires: %{_bindir}/find
+# for find-provides.ksyms, find-requires.ksyms, kmodtool
+Requires: %{_bindir}/sed
+# for find-provides.ksyms, find-requires.ksyms
+Requires: %{_bindir}/awk
+Requires: %{_bindir}/grep
+Requires: %{_bindir}/nm
+Requires: %{_bindir}/objdump
+Requires: %{_bindir}/readelf
+# for find-requires.ksyms
+Requires: %{_sbindir}/modinfo
+Requires: %{_sbindir}/modprobe
 
 %description -n kernel-rpm-macros
 Macros and scripts for building kernel module packages.
@@ -121,6 +134,29 @@ install -p -m 644 -t "%{buildroot}%{_fileattrsdir}" modalias.attr
 %{rrcdir}/rpmsort
 
 %changelog
+* Thu Jul 20 2023 Fedora Release Engineering <releng@fedoraproject.org> - 1.0-20
+- Rebuilt for https://fedoraproject.org/wiki/Fedora_39_Mass_Rebuild
+
+* Tue May 09 2023 Eugene Syromiatnikov <esyr@redhat.com> - 1.0-19
+- Capture local __crc_* symbols for "Provides: kernel()".
+- Add support for XZ compression for the symvers file.
+- Fix "Provides: kernel()" generation when both __kcrctab and __kcrctab_gpl
+  are present.
+- Fix regression for "Provides:" generation in cases when modversions are stored
+  in a section that is over 64K in size.
+- Speedup and cleanup changes in find-provides.ksyms and find-requires.ksyms.
+- Fix regex usage in kmod.attr. (Denys Vlasenko)
+- Implement modalias "Provides:" grouping. (Denys Vlasenko)
+- Speedup and cleanup changes in modalias.prov and kmod.attr. (Denys Vlasenko)
+
+* Tue Mar 30 2023 Eugene Syromiatnikov <esyr@redhat.com> - 1.0-18
+- Avoid triggering debuginfod during elfutils tools usage.
+
+* Tue Jan 31 2023 Eugene Syromiatnikov <esyr@redhat.com> - 1.0-17
+- Support storing of __crc_* symbols in sections other than .rodata.
+- Work around a change in type of __crc_* symbols for some kmods printed by nm
+  on ppc64le and s390x.
+
 * Wed Apr 05 2023 Liu Yang <Yang.Liu.sn@gmail.com> - 1.0-16.rv64
 - Add riscv64.
 

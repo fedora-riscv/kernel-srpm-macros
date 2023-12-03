@@ -26,13 +26,15 @@ if ! [ -z "$is_kernel_package" ]; then
     exit 0
 fi
 
-# Check for presence of the commands used
-which /sbin/modinfo >/dev/null || exit 0
-which sed >/dev/null || exit 0
-which sort >/dev/null || exit 0
+# Check for presence of the commands used.
+# "command" is a builtin, faster to use than fork+execing "which" - see
+# https://pubs.opengroup.org/onlinepubs/9699919799/utilities/command.html
+command -v /sbin/modinfo >/dev/null || exit 1
+command -v sed >/dev/null || exit 1
+command -v sort >/dev/null || exit 1
 
 print_modaliases() {
-    declare class=$1 variants=$2 pos=$3
+    local class="$1" variants="$2" pos="$3"
     if [ -n "$variants" ]; then
 	echo "${class:0:pos}[$variants]${class:pos+1}"
     else
@@ -40,39 +42,87 @@ print_modaliases() {
     fi
 }
 
+# Try to make "provides" list a bit smaller:
+# find "mergeable" strings a-la
+# modalias(pci:v0000168Cd00000023sv*sd*bc*sc*i*)
+# modalias(pci:v0000168Cd00000024sv*sd*bc*sc*i*)
+# modalias(pci:v0000168Cd00000027sv*sd*bc*sc*i*)
+# modalias(pci:v0000168Cd00000029sv*sd*bc*sc*i*)
+# replace with
+# modalias(pci:v0000168Cd0000002[3479]sv*sd*bc*sc*i*)
 combine_modaliases() {
-    declare tag class variants="" pos="" n
-    read class
-    while read tag; do
-	for ((n=0; n<${#class}; n++)); do
-	    if [ "*" != "${class:n:1}" -a \
-		 "${class:0:n}" = "${tag:0:n}" -a \
-		 "${class:n+1}" = "${tag:n+1}" ] &&
-	       ( [ -z "$pos" ] || [ $n = $pos ] ); then
-		variants="${variants:-${class:n:1}}${tag:n:1}"
-		pos=$n
+    local unused_len next prev variants="" pos="" n end xc
+
+    # Due to set -e, we can exit with exitcode 1 on read EOF
+    # and this makes our caller think we failed. "|| return 0" prevents this:
+    IFS=' ' read unused_len prev || return 0
+
+    # For each line after the first...
+    while IFS=' ' read unused_len next; do
+	if [ -z "$pos" ]; then
+	    # 2nd line: after "modalias(" prefix, for each char in prev line...
+	    n=9
+	    end=${#prev}
+	    # TODO speedup? if [ $end != ${#next} ]; then line is not mergeable
+	else
+	    # 3rd+ lines: only check the char at the same position
+	    n=$pos
+	    end=$((pos + 1))
+	fi
+	# Search for aaaNbbb,aaaMbbb line pair, where N and M chars differ.
+	# sort -u guarantees there are no identical line pairs.
+	# We assume that lines will not differ only in " = version" suffix.
+	for ((; n < $end; n++)); do
+	    if [ "${prev:0:n}" != "${next:0:n}" ]; then
+		# the prefixes already aren't the same: break
+		n=$end
 		break
 	    fi
+	    # If suffixes differ, go to next char
+	    [ x"${prev:n+1}" != x"${next:n+1}" ] && continue
+	    # Found aaaNbbb,aaaMbbb. If N and M aren't special...
+	    xc=x"${prev:n:1}"
+	    [ x"[" = "$xc" -o x"]" = "$xc" ] && continue
+	    [ x"?" = "$xc" -o x"*" = "$xc" ] && continue
+	    xc=x"${next:n:1}"
+	    [ x"[" = "$xc" -o x"]" = "$xc" ] && continue
+	    [ x"?" = "$xc" -o x"*" = "$xc" ] && continue
+	    # Add M (and maybe N) to $variants, go to next line
+	    variants="${variants:-${prev:n:1}}${next:n:1}"
+	    pos=$n
+	    break
 	done
-	if [ $n -eq ${#class} ]; then
-	    print_modaliases "$class" "$variants" "$pos"
-	    variants=
-	    pos=
-	    class=$tag
+	if [ $n -eq $end ]; then
+	    # This line is not mergeable with the previous one(s),
+	    # print collected merged line and reset the state
+	    print_modaliases "$prev" "$variants" "$pos"
+	    variants=""
+	    pos=""
+	    prev=$next
 	fi
     done
-    print_modaliases "$class" "$variants" "$pos"
+    # Print last collected merged line
+    print_modaliases "$prev" "$variants" "$pos"
 }
 
 for module in $(grep -E '/lib/modules/.+\.ko(\.gz|\.bz2|\.xz|\.zst)?$') "$@"; do
-    # | head -n1 because some modules have *two* version tags. *cough*b44*cough*
-    modver=$(/sbin/modinfo -F version "$module"| head -n1)
-    modver=${modver//[^0-9a-zA-Z._]/_}
-    # only add version tag if it has a version
+    modver=$(/sbin/modinfo -F version "$module")
+    # delete possible extra lines because some modules have *two* version tags. *cough*b44*cough*
+    modver=${modver%%$'\n'*}    # using $'' bashism, avoid running "head -n1" process
+    # replace any strange chars with underscores.
+    # [!...] is glob's "match any char not in set" pattern
+    # (although bash supports [^...] too, it is not standard)
+    modver=${modver//[!0-9a-zA-Z._]/_}
+    # only add version tag if it indeed has a version
     [ -z "$modver" ] || modver=" = $modver"
 
     /sbin/modinfo -F alias "$module" \
-    | sed -nre "s,[^][0-9a-zA-Z._:*?/-],_,g; s,(.+),modalias(\\1)$modver,p"
+    | sed -E "s,[^][0-9a-zA-Z._:*?/-],_,g; s,(.+),modalias(\\1)$modver,"
+
+    # Below: combining code can only possibly combine lines of equal length.
+    # Prepend line lengths before sort, so that same-length lines end up next
+    # to each other. (The lengths are discarded by combine_modaliases).
 done \
-| sort -u \
+| { while read line; do echo "${#line} $line"; done } \
+| LC_ALL=C sort -u \
 | combine_modaliases
